@@ -2,14 +2,12 @@
 
 
 
-public class ToSpoon {
+public class FooMethod {
     public boolean foo(int a, final boolean b) {
         System.out.println("ok");
         if (b) {
-            System.out.println("ko");
             return false;
         }
         return true;
     }
 }
-

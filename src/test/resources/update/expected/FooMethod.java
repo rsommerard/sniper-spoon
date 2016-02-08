@@ -1,5 +1,5 @@
 
-public class ToSpoon {
+public class FooMethod {
 
     public boolean foo(int a, final boolean b) {
 
@@ -9,7 +9,6 @@ public class ToSpoon {
         if (b) {
             return false;
         }
-
 
         // TODO: Should not be deleted after process
         return true;

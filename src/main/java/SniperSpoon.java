@@ -21,11 +21,6 @@ public class SniperSpoon {
 
     private static Logger logger = Logger.getLogger(SniperSpoon.class);
 
-    private static final String DST_PATH = "spooned/";
-
-    private static final boolean DEV = true;
-    private static final String DEV_PATH = "src/main/resources/dev/ToSpoon.java";
-
     private Launcher spoonLauncher;
     private String srcPath;
     private String dstPath;
@@ -43,23 +38,14 @@ public class SniperSpoon {
         spoonLauncher.addProcessor(processor);
     }
 
-    public void run(final String path) throws IOException {
-        if (this.DEV) {
-            this.srcPath = this.DEV_PATH;
-        } else {
-            this.srcPath = path;
-        }
-
-        this.dstPath = this.getDstPath();
-
-        this.logger.info("Src path: " + this.srcPath);
-        this.logger.info("Dst path: " + this.dstPath);
-
-        //this.spoonSrcFile();
-        this.compareFiles();
+    public SniperSpoon() {
+        this.spoonLauncher = new Launcher();
     }
 
-    private void compareFiles() throws IOException {
+    public void compareFiles(final String srcPath, final String spoonedPath) throws IOException {
+        this.srcPath = srcPath;
+        this.dstPath = spoonedPath;
+
         Run.initGenerators();
         ITree src = Generators.getInstance().getTree(this.srcPath).getRoot();
         ITree dst = Generators.getInstance().getTree(this.dstPath).getRoot();
@@ -81,6 +67,7 @@ public class SniperSpoon {
         for(Action action : this.actions) {
             this.logger.info(action.toString());
 
+            // Get root action
             ITree parent = action.getNode().getParent();
             if (parent != null) {
                 for (Action _action : this.actions) {
@@ -100,7 +87,6 @@ public class SniperSpoon {
     }
 
     private void dispatchAction(Action action) throws IOException {
-        //TODO: Move
         if (action instanceof Update) {
             this.updateProcess(action);
         } else if (action instanceof Delete) {
@@ -156,6 +142,13 @@ public class SniperSpoon {
             return;
         }
 
+        for (int i = indexDesc + 1; i < nbDesc; i++) {
+            if (dstDescs.get(i).getParent().equals(dstNode.getParent())) {
+                indexDesc = i;
+                break;
+            }
+        }
+
         this.logger.info("Descendant index: " + indexDesc);
 
         if (srcDescs.size() < indexDesc) {
@@ -163,12 +156,7 @@ public class SniperSpoon {
             return;
         }
 
-        ITree nodeToTake = null;
-        if (indexDesc != 0) {
-            nodeToTake = dstDescs.get(indexDesc - 1);
-        } else {
-            nodeToTake = dstDescs.get(indexDesc);
-        }
+        ITree nodeToTake = dstDescs.get(indexDesc);
 
         ITree nodeInSrc = mappingStore.getSrc(nodeToTake);
 
@@ -176,25 +164,7 @@ public class SniperSpoon {
             nodeInSrc = nodeInSrc.getParent();
         }
 
-        //get next node
-        nbDesc = srcDescs.size();
-        for (int i = 0; i < nbDesc; i++) {
-            if (srcDescs.get(i).equals(nodeInSrc)) {
-                indexDesc = i;
-                break;
-            }
-        }
-
-        for (int i = indexDesc + 1; i < nbDesc; i++) {
-            if (srcDescs.get(i).getParent().equals(nodeInSrc.getParent())) {
-                indexDesc = i;
-                break;
-            }
-        }
-
-        nodeToTake = srcDescs.get(indexDesc);
-
-        int srcStartInsertPosition = nodeToTake.getPos();
+        int srcStartInsertPosition = nodeInSrc.getPos();
 
         this.logger.info("Src start insert position: " + srcStartInsertPosition);
         //END INSERT PART
@@ -207,28 +177,42 @@ public class SniperSpoon {
 
         String newSrcContent = "";
 
-        int cursor = 0;
-        if (srcStartDeletePosition > srcStartInsertPosition) {
-            while (dstContent.charAt(srcStartInsertPosition - cursor) != '\n') {
-                cursor++;
-            }
-
-            newSrcContent = srcContent.substring(0, srcStartInsertPosition);
-            newSrcContent += dstContent.substring(dstStartPosition, dstEndPosition) + dstContent.substring(dstStartPosition - cursor, dstStartPosition);
-
-            newSrcContent += srcContent.substring(dstStartPosition, srcStartDeletePosition);
-            newSrcContent += srcContent.substring(srcEndDeletePosition);
-        } else {
+        if (srcStartDeletePosition < srcStartInsertPosition) {
+            //DELETE FIRST
             newSrcContent += srcContent.substring(0, srcStartDeletePosition);
             newSrcContent += srcContent.substring(srcEndDeletePosition, srcStartInsertPosition);
 
-            cursor = 0;
-            while (dstContent.charAt(dstStartPosition - cursor) != '\n') {
+            int cursor = 0;
+            while (srcContent.charAt(srcStartInsertPosition - cursor) != '\n') {
                 cursor++;
             }
 
-            newSrcContent += dstContent.substring(dstStartPosition, dstEndPosition) + dstContent.substring(dstStartPosition - cursor, dstStartPosition);
+            // copy insertion in dst to newSrc
+            newSrcContent += dstContent.substring(dstStartPosition, dstEndPosition);
+
+            //add previous indentation
+            newSrcContent += srcContent.substring(srcStartInsertPosition - cursor, srcStartInsertPosition);
+
+            // add the rest of file
             newSrcContent += srcContent.substring(srcStartInsertPosition);
+        } else {
+            //INSERT FIRST
+            newSrcContent += srcContent.substring(0, srcStartInsertPosition);
+
+            int cursor = 0;
+            while (srcContent.charAt(srcStartInsertPosition - cursor) != '\n') {
+                cursor++;
+            }
+
+            // copy insertion in dst to newSrc
+            newSrcContent += dstContent.substring(dstStartPosition, dstEndPosition);
+
+            //add previous indentation
+            newSrcContent += srcContent.substring(srcStartInsertPosition - cursor, srcStartInsertPosition);
+
+            newSrcContent += srcContent.substring(srcStartInsertPosition, srcStartDeletePosition);
+
+            newSrcContent += srcContent.substring(srcEndDeletePosition);
         }
 
         this.writeSrcContent(newSrcContent);
@@ -255,6 +239,7 @@ public class SniperSpoon {
         List<ITree> dstDescs = node.getDescendants();
         List<ITree> srcDescs = srcNode.getDescendants();
 
+        // Get node inserted
         int indexDesc = -1;
         int nbDesc = dstDescs.size();
         for (int i = 0; i < nbDesc; i++) {
@@ -269,41 +254,70 @@ public class SniperSpoon {
             return;
         }
 
+        // get node after inserted
+        boolean noNextNode = false;
+        for (int i = indexDesc + 1; i < nbDesc; i++) {
+            if (!dstDescs.get(i).getParents().contains(dstNode)) {
+                indexDesc = i;
+                break;
+            }
+
+            if (i == nbDesc - 1) {
+                noNextNode = true;
+            }
+        }
+
+        if (noNextNode) {
+            for (int i = indexDesc - 1; i >= 0; i--) {
+                if (!dstDescs.get(i).getParents().contains(dstNode)) {
+                    indexDesc = i;
+                    break;
+                }
+            }
+
+            while (indexDesc > 0 && dstDescs.get(indexDesc).getParent() != dstNode.getParent()) {
+                indexDesc--;
+            }
+        }
+
         this.logger.info("Descendant index: " + indexDesc);
 
-        if (srcDescs.size() < indexDesc) {
+        if (dstDescs.size() < indexDesc) {
             this.logger.error("No descendant source correpondance.");
             return;
         }
 
-        srcNode = srcDescs.get(indexDesc);
+        // get src node in descendant parent
+        srcNode = mappingStore.getSrc(dstDescs.get(indexDesc));
 
         int srcStartPosition = srcNode.getPos();
-
         int dstStartPosition = dstNode.getPos();
-
-        int dstEndPosition = dstStartPosition + dstNode.getLength();
-
-        this.logger.info("Src start position: " + srcStartPosition);
+        int dstEndPosition = dstDescs.get(indexDesc).getPos();
 
         String srcContent = this.getSrcContent();
         String dstContent = this.getDstContent();
 
-        String newSrcContent = srcContent.substring(0, srcStartPosition);
+        if (noNextNode) {
+            int cursor = 0;
+            while (dstContent.charAt(dstStartPosition - cursor) != '\n') {
+                cursor++;
+            }
 
-        int cursor = 0;
-        while (dstContent.charAt(dstStartPosition - cursor) != '\n') {
-            cursor++;
+            srcStartPosition = srcNode.getEndPos();
+
+            dstStartPosition = dstNode.getPos() - cursor;
+            dstEndPosition = dstNode.getEndPos() + 1;
         }
 
-        newSrcContent += dstContent.substring(dstStartPosition, dstEndPosition) + dstContent.substring(dstStartPosition - cursor, dstStartPosition);
+        String newSrcContent = srcContent.substring(0, srcStartPosition);
+
+        newSrcContent += dstContent.substring(dstStartPosition, dstEndPosition);
 
         newSrcContent += srcContent.substring(srcStartPosition);
 
         this.writeSrcContent(newSrcContent);
     }
 
-    // TODO: problème suppression foo(int a, final boolean b) en foo(final boolean b). Le résultat est foo(, final boolean b)
     private void deleteProcess(Action action) throws IOException {
         ITree srcNode = action.getNode();
 
@@ -340,19 +354,18 @@ public class SniperSpoon {
             }
         }
 
-        if (indexNode == -1) {
+        if (indexNode == -1 && (indexNode + 1 < nbDesc)) {
             this.logger.error("Research node in parent error.");
             return indexNode;
         }
 
         for(int i = indexNode + 1; i < nbDesc; i++) {
-            if (!descs.get(i).getParents().contains(node)) {
+            if (descs.get(i).getParent().equals(parent)) {
                 return descs.get(i).getPos();
             }
         }
 
-        this.logger.error("Research node in parent error.");
-        return -1;
+        return node.getPos() + node.getLength();
     }
 
     private void updateProcess(Action action) throws IOException {
@@ -362,8 +375,7 @@ public class SniperSpoon {
         int srcStartPosition = srcNode.getPos();
         int modificationLength = srcNode.getLength();
 
-        //TODO: check if +1 is good
-        int srcEndPosition = srcStartPosition + modificationLength + 1;
+        int srcEndPosition = srcStartPosition + modificationLength;
 
         this.logger.info("Src start position: " + srcStartPosition);
         this.logger.info("Src end position: " + srcEndPosition);
@@ -381,12 +393,7 @@ public class SniperSpoon {
     private void writeSrcContent(String newSrcContent) throws IOException {
         FileWriter writer = null;
 
-        if (this.DEV) {
-            String devPath = this.DEV_PATH;
-            writer = new FileWriter(new File(devPath));
-        } else {
-            writer = new FileWriter(new File(this.srcPath));
-        }
+        writer = new FileWriter(new File(this.srcPath));
 
         writer.write(newSrcContent);
         writer.close();
@@ -400,19 +407,7 @@ public class SniperSpoon {
         return new String(Files.readAllBytes(Paths.get(this.dstPath)));
     }
 
-    private void spoonSrcFile() {
-        this.spoonLauncher.run(new String[] { "-i", this.srcPath, "--with-imports"});
-    }
-
-    private String getSrcFileName() {
-        String[] pathTruncated = this.srcPath.split("/");
-
-        int last = pathTruncated.length - 1;
-
-        return pathTruncated[last];
-    }
-
-    private String getDstPath() {
-        return this.DST_PATH + this.getSrcFileName();
+    public void spoonSrcFile(final String srcPath, final String spoonedPath) {
+        this.spoonLauncher.run(new String[] { "-i", srcPath, "-o", spoonedPath, "--with-imports"});
     }
 }

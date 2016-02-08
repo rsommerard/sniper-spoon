@@ -1,4 +1,3 @@
-import processors.FooBarProcessor;
 import processors.ReturnFalseProcessor;
 import spoon.processing.Processor;
 
@@ -9,8 +8,10 @@ public class Main {
         Processor spoonProcessor = new ReturnFalseProcessor();
         SniperSpoon sniperSpoon = new SniperSpoon(spoonProcessor);
 
-        String path = "src/main/resources/ToSpoon.java";
+        String srcPath = "src/main/resources/ToSpoon.java";
+        String spoonedPath = "spooned/ToSpoon.java";
 
-        sniperSpoon.run(path);
+        sniperSpoon.spoonSrcFile(srcPath, spoonedPath);
+        sniperSpoon.compareFiles(srcPath, spoonedPath);
     }
 }
