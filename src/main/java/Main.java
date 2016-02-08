@@ -9,7 +9,7 @@ public class Main {
         SniperSpoon sniperSpoon = new SniperSpoon(spoonProcessor);
 
         String srcPath = "src/main/resources/ToSpoon.java";
-        String spoonedPath = "spooned/ToSpoon.java";
+        String spoonedPath = "spooned/";
 
         sniperSpoon.spoonSrcFile(srcPath, spoonedPath);
         sniperSpoon.compareFiles(srcPath, spoonedPath);
